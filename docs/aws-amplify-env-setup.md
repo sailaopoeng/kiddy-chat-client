@@ -6,7 +6,7 @@
 
 1. Go to your AWS Amplify Console
 2. Select your app
-3. Go to **App settings** → **Environment variables**
+3. Go to **Hosting** → **Environment variables**
 4. Add the following environment variables:
 
 ```
