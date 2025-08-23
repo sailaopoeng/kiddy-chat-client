@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { sendQuery } from '../services/api'
+import { sendQuery, getConversationStarters } from '../services/api'
 import SettingsModal from './SettingsModal'
 import './ChatScreen.css'
 
@@ -65,6 +65,8 @@ const ChatScreen = ({ sessionId, kidName }) => {
   const [inputText, setInputText] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [conversationStarters, setConversationStarters] = useState([])
+  const [isLoadingStarters, setIsLoadingStarters] = useState(true)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -75,6 +77,37 @@ const ChatScreen = ({ sessionId, kidName }) => {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Load conversation starters on component mount
+  useEffect(() => {
+    const loadConversationStarters = async () => {
+      try {
+        setIsLoadingStarters(true)
+        const starters = await getConversationStarters()
+        setConversationStarters(starters)
+      } catch (error) {
+        console.error('Failed to load conversation starters:', error)
+        // Set default starters if API fails
+        setConversationStarters([
+          "Tell me a fun fact! 🌟",
+          "Help me with my homework 📚", 
+          "Let's play a word game! 🎮",
+          "What's your favorite joke? 😄"
+        ])
+      } finally {
+        setIsLoadingStarters(false)
+      }
+    }
+
+    loadConversationStarters()
+  }, [])
+
+  const handleStarterClick = (starter) => {
+    // Remove emojis and extra punctuation for cleaner input
+    const cleanStarter = starter.replace(/[🌟📚🎮😄💡]/g, '').trim()
+    setInputText(cleanStarter)
+    inputRef.current?.focus()
+  }
 
   const sendMessage = async (text) => {
     if (!text.trim()) return
@@ -209,19 +242,30 @@ const ChatScreen = ({ sessionId, kidName }) => {
           </div>
         </form>
         
-        <div className="input-hints">
-          <div className="hint">
-            <span className="hint-mobile">💡 Fun facts!</span>
-            <span className="hint-desktop">💡 Try asking: "Tell me a fun fact!"</span>
-          </div>
-          <div className="hint">
-            <span className="hint-mobile">📚 Homework help</span>
-            <span className="hint-desktop">📚 Or: "Help me with my homework"</span>
-          </div>
-          <div className="hint">
-            <span className="hint-mobile">🎮 Word games!</span>
-            <span className="hint-desktop">🎮 Or: "Let's play a word game!"</span>
-          </div>
+        <div className="conversation-starters">
+          {isLoadingStarters ? (
+            <div className="starters-loading">
+              <span>Loading conversation ideas... ✨</span>
+            </div>
+          ) : (
+            Array.isArray(conversationStarters) && conversationStarters.length > 0 ? (
+              conversationStarters.slice(0, 3).map((starter, index) => (
+                <button
+                  key={index}
+                  className="starter-button"
+                  onClick={() => handleStarterClick(starter)}
+                  disabled={isLoading}
+                  title={starter} // Add tooltip for very long text
+                >
+                  {starter}
+                </button>
+              ))
+            ) : (
+              <div className="starters-loading">
+                <span>No conversation starters available</span>
+              </div>
+            )
+          )}
         </div>
       </div>
 

@@ -5,19 +5,19 @@ import axios from 'axios'
 // In production (AWS Amplify), use the full API URL from environment variables
 const getBaseURL = () => {
   // Debug logging for environment variables
-  console.log('Environment check:')
-  console.log('- NODE_ENV:', import.meta.env.MODE)
-  console.log('- PROD:', import.meta.env.PROD)
-  console.log('- VITE_API_URL:', import.meta.env.VITE_API_URL)
+  // console.log('Environment check:')
+  // console.log('- NODE_ENV:', import.meta.env.MODE)
+  // console.log('- PROD:', import.meta.env.PROD)
+  // console.log('- VITE_API_URL:', import.meta.env.VITE_API_URL)
   
   // Check if we're in production (AWS Amplify)
   if (import.meta.env.PROD) {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-    console.log('Using production API URL:', apiUrl)
+    // console.log('Using production API URL:', apiUrl)
     return apiUrl
   }
   // In development, use proxy
-  console.log('Using development proxy: /api')
+  // console.log('Using development proxy: /api')
   return '/api'
 }
 
@@ -32,9 +32,9 @@ const api = axios.create({
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    console.log('Making API request:', config.method?.toUpperCase(), config.url)
-    console.log('Full URL:', config.baseURL + config.url)
-    console.log('Headers:', config.headers)
+    // console.log('Making API request:', config.method?.toUpperCase(), config.url)
+    // console.log('Full URL:', config.baseURL + config.url)
+    // console.log('Headers:', config.headers)
     return config
   },
   (error) => {
@@ -46,7 +46,7 @@ api.interceptors.request.use(
 // Response interceptor
 api.interceptors.response.use(
   (response) => {
-    console.log('API response received:', response.status, response.config.url)
+    // console.log('API response received:', response.status, response.config.url)
     return response
   },
   (error) => {
@@ -135,7 +135,8 @@ export const sendQuery = async (sessionId, message) => {
 export const getConversationStarters = async () => {
   try {
     const response = await api.get('/conversation-starters')
-    return response.data
+    // Extract the conversation_starters array from the response
+    return response.data.conversation_starters || []
   } catch (error) {
     console.warn('Failed to load conversation starters:', error)
     // Return default starters if API fails

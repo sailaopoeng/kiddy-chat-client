@@ -7,10 +7,10 @@ function App() {
   const [sessionId, setSessionId] = useState(null)
   const [kidName, setKidName] = useState('')
 
-  console.log('App rendering - sessionId:', sessionId, 'kidName:', kidName)
+  // console.log('App rendering - sessionId:', sessionId, 'kidName:', kidName)
 
   const handleSessionStart = (name, id) => {
-    console.log('handleSessionStart called with name:', name, 'id:', id)
+    // console.log('handleSessionStart called with name:', name, 'id:', id)
     setKidName(name)
     setSessionId(id)
   }

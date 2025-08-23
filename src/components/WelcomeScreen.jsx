@@ -7,11 +7,11 @@ const WelcomeScreen = ({ onSessionStart }) => {
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState('')
 
-    console.log('WelcomeScreen is rendering!')
+    // console.log('WelcomeScreen is rendering!')
 
     const handleSubmit = async (e) => {
         e.preventDefault()
-        console.log('Form submitted with name:', name)
+        // console.log('Form submitted with name:', name)
 
         if (!name.trim()) {
             setError('Please tell me your name! 😊')
@@ -22,7 +22,7 @@ const WelcomeScreen = ({ onSessionStart }) => {
         setError('')
 
         try {
-            console.log('Calling initiateSession with:', name.trim())
+            // console.log('Calling initiateSession with:', name.trim())
             const { sessionId } = await initiateSession(name.trim())
             console.log('Got sessionId:', sessionId)
             onSessionStart(name.trim(), sessionId)

@@ -3,7 +3,7 @@
   display: flex;
   flex-direction: column;
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  font-family: 'Comic Sans MS', cursive, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
 }
 
 .chat-header {
@@ -320,47 +320,108 @@
   cursor: not-allowed;
 }
 
-.input-hints {
+.conversation-starters {
   display: flex;
   gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding: 5px 0;
   max-width: 800px;
   margin: 0 auto;
+  /* Hide scrollbar for cleaner look */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
-.hint {
+.conversation-starters::-webkit-scrollbar {
+  height: 6px;
+}
+
+.conversation-starters::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.conversation-starters::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.conversation-starters::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.starter-button {
   background: #f7fafc;
   color: #718096;
-  padding: 8px 12px;
+  padding: 8px 16px;
   border-radius: 15px;
   font-size: 0.85rem;
   border: 1px solid #e2e8f0;
+  cursor: pointer;
   transition: all 0.3s ease;
+  font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: fit-content;
 }
 
-.hint:hover {
+.starter-button:hover {
   background: #edf2f7;
   transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Responsive hint text */
-.hint-mobile {
+.starter-button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.starter-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.starters-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+  color: #718096;
+  font-size: 0.9rem;
+}
+
+/* Show full text on all screen sizes */
+.starter-mobile {
   display: none;
 }
 
-.hint-desktop {
+.starter-desktop {
   display: inline;
 }
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {
-  .hint-mobile {
+  .starter-mobile {
+    display: none; /* Keep using desktop version for full text */
+  }
+  
+  .starter-desktop {
     display: inline;
   }
   
-  .hint-desktop {
-    display: none;
+  .conversation-starters {
+    gap: 8px;
+    margin: 8px 0 0 0;
+    padding: 5px 15px;
+    /* Add padding to sides for better mobile scrolling */
+  }
+  
+  .starter-button {
+    font-size: 0.8rem;
+    padding: 8px 14px;
+    /* Ensure buttons don't get too small */
+    min-width: fit-content;
   }
   
   .messages-container {
@@ -373,26 +434,6 @@
   
   .input-container {
     padding: 15px;
-  }
-  
-  .input-hints {
-    flex-direction: row;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 8px;
-    max-width: 100%;
-  }
-  
-  .hint {
-    text-align: center;
-    font-size: 0.75rem;
-    padding: 6px 8px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 30%;
-    flex: 1;
-    min-width: 0;
   }
   
   .header-content {
