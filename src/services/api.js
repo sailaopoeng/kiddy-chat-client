@@ -4,7 +4,7 @@ import axios from 'axios'
 // In development, use proxy (/api) to avoid CORS issues
 // In production, use the full API URL
 const api = axios.create({
-  baseURL: import.meta.env.DEV ? '/api' : (import.meta.env.VITE_API_URL || 'http://localhost:3001'),
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
   timeout: 30000, // 30 seconds
   headers: {
     'Content-Type': 'application/json',
