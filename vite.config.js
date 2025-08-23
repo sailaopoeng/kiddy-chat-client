@@ -4,9 +4,14 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Environment variables configuration
+  define: {
+    // Ensure environment variables are available
+    __VITE_API_URL__: JSON.stringify(process.env.VITE_API_URL),
+  },
   server: {
     proxy: {
-      // Proxy API requests to the backend
+      // Proxy API requests to the backend (development only)
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:3001',
         changeOrigin: true,

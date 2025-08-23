@@ -2,10 +2,28 @@ import axios from 'axios'
 
 // Create an axios instance with default configuration
 // In development, use proxy (/api) to avoid CORS issues
-// In production, use the full API URL
+// In production (AWS Amplify), use the full API URL from environment variables
+const getBaseURL = () => {
+  // Debug logging for environment variables
+  console.log('Environment check:')
+  console.log('- NODE_ENV:', import.meta.env.MODE)
+  console.log('- PROD:', import.meta.env.PROD)
+  console.log('- VITE_API_URL:', import.meta.env.VITE_API_URL)
+  
+  // Check if we're in production (AWS Amplify)
+  if (import.meta.env.PROD) {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+    console.log('Using production API URL:', apiUrl)
+    return apiUrl
+  }
+  // In development, use proxy
+  console.log('Using development proxy: /api')
+  return '/api'
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
-  timeout: 30000, // 30 seconds
+  baseURL: getBaseURL(),
+  timeout: parseInt(import.meta.env.VITE_API_TIMEOUT) || 30000,
   headers: {
     'Content-Type': 'application/json',
   },
