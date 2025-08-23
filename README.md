@@ -2,6 +2,9 @@
 
 A fun and engaging React.js chatbot application specifically designed for children! This frontend application provides a colorful, kid-friendly interface where children can chat with an AI assistant.
 
+## Live Demo
+You can try the live demo at [Kiddy Chat Demo](https://kiddy-chat-client.sailaopoeng.com/).
+
 ## ✨ Features
 
 - **Kid-Friendly Design**: Colorful gradients, fun emojis, and Comic Sans font
