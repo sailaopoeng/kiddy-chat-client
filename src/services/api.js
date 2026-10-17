@@ -41,8 +41,13 @@ export function friendlyErrorMessage({ status, timedOut = false, network = false
   return "Oops! Something went wrong. Let's try again! 🤖"
 }
 
-async function request(path, { method = 'GET', body, sessionId } = {}) {
-  const headers = {}
+const networkError = (error) => {
+  const timedOut = error?.name === 'AbortError'
+  return new ApiError(friendlyErrorMessage({ timedOut, network: !timedOut }), { cause: error })
+}
+
+async function request(path, { method = 'GET', body, sessionId, headers: extraHeaders } = {}) {
+  const headers = { ...extraHeaders }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (sessionId) headers.Authorization = `Bearer ${sessionId}`
 
@@ -58,9 +63,8 @@ async function request(path, { method = 'GET', body, sessionId } = {}) {
       signal: controller.signal,
     })
   } catch (error) {
-    const timedOut = error?.name === 'AbortError'
     console.error(`API ${method} ${path} failed:`, error)
-    throw new ApiError(friendlyErrorMessage({ timedOut, network: !timedOut }), { cause: error })
+    throw networkError(error)
   } finally {
     clearTimeout(timer)
   }
@@ -114,6 +118,99 @@ export async function sendQuery(sessionId, message) {
   }
 }
 
+/** Parses one Server-Sent Events block ("event: ...\ndata: {...}"). */
+export function parseSseBlock(block) {
+  let event = 'message'
+  const dataLines = []
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''))
+  }
+  if (dataLines.length === 0) return null
+  try {
+    return { event, data: JSON.parse(dataLines.join('\n')) }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Like sendQuery, but shows the reply as it is written.
+ * onDelta is called with each new piece of text. Resolves with the final reply,
+ * which can differ from the pieces if the server's safety check replaced it.
+ * Falls back to sendQuery when the server has no streaming endpoint.
+ * @returns {Promise<string>}
+ */
+export async function streamQuery(sessionId, message, onDelta) {
+  const controller = new AbortController()
+  let timer
+  // The timeout restarts whenever data arrives, so long replies aren't cut off.
+  const restartTimer = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  }
+  restartTimer()
+
+  let response
+  try {
+    response = await fetch(`${BASE_URL}/query/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        Authorization: `Bearer ${sessionId}`,
+      },
+      body: JSON.stringify({ message: message.trim() }),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    clearTimeout(timer)
+    console.error('API POST /query/stream failed:', error)
+    throw networkError(error)
+  }
+
+  if (response.status === 404 || response.status === 405) {
+    clearTimeout(timer)
+    const { response: reply } = await sendQuery(sessionId, message)
+    return reply
+  }
+
+  if (!response.ok || !response.body) {
+    clearTimeout(timer)
+    console.error(`API POST /query/stream returned ${response.status}`)
+    throw new ApiError(friendlyErrorMessage({ status: response.status }), { status: response.status })
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  let finalReply = null
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      restartTimer()
+      buffer += value.replace(/\r\n/g, '\n')
+
+      let end
+      while ((end = buffer.indexOf('\n\n')) !== -1) {
+        const parsed = parseSseBlock(buffer.slice(0, end))
+        buffer = buffer.slice(end + 2)
+        if (parsed?.event === 'delta' && parsed.data.text) onDelta(parsed.data.text)
+        if (parsed?.event === 'done') finalReply = parsed.data.response ?? ''
+      }
+    }
+  } catch (error) {
+    console.error('Reading the reply stream failed:', error)
+    throw networkError(error)
+  } finally {
+    clearTimeout(timer)
+  }
+
+  // The stream ended without its final event: the connection dropped.
+  if (finalReply === null) throw new ApiError(friendlyErrorMessage({ network: true }))
+  return finalReply
+}
+
 /**
  * Conversation starter ideas. Falls back to built-in ideas if the server
  * can't be reached, so this never throws.
@@ -144,20 +241,50 @@ export async function getFilterInfo() {
 }
 
 /**
+ * Whether the server wants a grown-up PIN before instructions can change.
+ * Older servers (or an unreachable one) count as "no PIN".
+ * @returns {Promise<{pinRequired: boolean}>}
+ */
+export async function getParentStatus() {
+  try {
+    const data = await request('/parent/status')
+    return { pinRequired: Boolean(data.pin_required) }
+  } catch {
+    return { pinRequired: false }
+  }
+}
+
+/**
+ * Check the grown-up PIN. Resolves with a short-lived parent token.
+ * Rejects with ApiError status 401 (wrong PIN) or 429 (too many tries).
+ * @returns {Promise<string>}
+ */
+export async function verifyParentPin(pin) {
+  const data = await request('/parent/verify', { method: 'POST', body: { pin } })
+  return data.parent_token
+}
+
+/**
  * Add a grown-up's extra instructions to the current session.
+ * When the server has a grown-up PIN, pass either the parentToken from
+ * verifyParentPin, or the signature returned when the same text was saved.
  * @param {string} sessionId - Session ID, sent as the Bearer token
  * @param {string} prompt - The extra instructions
- * @returns {Promise<{success: boolean, message: string, data: object}>}
+ * @returns {Promise<{success: boolean, message: string, signature: string|null, data: object}>}
  */
-export async function addPrompt(sessionId, prompt) {
+export async function addPrompt(sessionId, prompt, { parentToken, signature } = {}) {
+  const body = { additional_prompt: prompt.trim() }
+  if (signature) body.signature = signature
   const data = await request('/session/add-prompt', {
     method: 'POST',
-    body: { additional_prompt: prompt.trim() },
+    body,
     sessionId,
+    headers: parentToken ? { 'X-Parent-Token': parentToken } : undefined,
   })
   return {
     success: true,
     message: data.message || 'Additional prompt saved successfully!',
+    signature: data.signature ?? null,
     data,
   }
 }

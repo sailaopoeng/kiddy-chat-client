@@ -7,6 +7,7 @@ import { isGateLocked, nextGateStateAfterFailure } from '../utils/parentGate'
 
 const KEYS = {
   instructions: 'chatbot-additional-prompt', // kept from earlier versions so saved text still loads
+  instructionsSignature: 'kiddy-parent-instructions-signature',
   dailyLimit: 'kiddy-daily-limit-minutes',
   usage: 'kiddy-usage-today',
   gate: 'kiddy-parent-gate',
@@ -19,15 +20,27 @@ export const BONUS_MINUTES = 15
 
 export const getParentInstructions = () => local.getString(KEYS.instructions, '')
 
-export const saveParentInstructions = (text) => local.setString(KEYS.instructions, text)
+/**
+ * Saves the instructions in this browser. signature comes from the server when
+ * it uses a grown-up PIN; it lets new chats reuse the approved text.
+ */
+export function saveParentInstructions(text, signature = null) {
+  local.setString(KEYS.instructions, text)
+  if (signature) local.setString(KEYS.instructionsSignature, signature)
+  else local.remove(KEYS.instructionsSignature)
+}
 
-export const clearParentInstructions = () => local.remove(KEYS.instructions)
+export function clearParentInstructions() {
+  local.remove(KEYS.instructions)
+  local.remove(KEYS.instructionsSignature)
+}
 
 /** Sends the saved instructions to a new session so they keep working after a refresh or new chat. */
 export async function applyParentInstructions(sessionId) {
   const instructions = getParentInstructions().trim()
   if (!instructions) return false
-  await addPrompt(sessionId, instructions)
+  const signature = local.getString(KEYS.instructionsSignature) || undefined
+  await addPrompt(sessionId, instructions, { signature })
   return true
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
-import { sendQuery, getConversationStarters } from '../services/api'
+import { streamQuery, getConversationStarters } from '../services/api'
 import { session as sessionStore } from '../services/storage'
 import { saveConversation } from '../services/chatHistory'
 import { useSpeech } from '../hooks/useSpeech'
@@ -47,7 +47,10 @@ const MessageText = ({ text, type }) => {
 
 const loadMessages = (sessionId, kidName) => {
   const saved = sessionStore.getJSON(messagesKey(sessionId), null)
-  if (Array.isArray(saved) && saved.length > 0) return saved
+  if (Array.isArray(saved) && saved.length > 0) {
+    // A refresh during a streamed reply leaves a half-finished message behind.
+    return saved.filter((message) => !message.streaming)
+  }
   return [{
     id: 'welcome',
     type: 'ai',
@@ -105,11 +108,29 @@ const ChatScreen = ({ sessionId, kidName, avatar = DEFAULT_KID_AVATAR, onNewChat
 
   const requestReply = async (text) => {
     setIsLoading(true)
+    const replyId = newId()
+    let started = false
+
+    const updateReply = (change) =>
+      setMessages((prev) => prev.map((message) => (message.id === replyId ? { ...message, ...change(message) } : message)))
+
     try {
-      const { response } = await sendQuery(sessionId, text)
-      addMessage({ type: 'ai', text: response || FALLBACK_REPLY })
+      const reply = await streamQuery(sessionId, text, (piece) => {
+        if (!started) {
+          started = true
+          addMessage({ id: replyId, type: 'ai', text: piece.trimStart(), streaming: true })
+        } else {
+          updateReply((message) => ({ text: message.text + piece }))
+        }
+      })
+
+      // The final reply is what counts: the server may have replaced it for safety.
+      const finalText = reply || FALLBACK_REPLY
+      if (started) updateReply(() => ({ text: finalText, streaming: false }))
+      else addMessage({ id: replyId, type: 'ai', text: finalText })
     } catch (error) {
       console.error('Error sending message:', error)
+      if (started) setMessages((prev) => prev.filter((message) => message.id !== replyId))
       const sessionExpired = Boolean(error.isSessionExpired)
       addMessage({
         type: 'ai',
@@ -163,6 +184,7 @@ const ChatScreen = ({ sessionId, kidName, avatar = DEFAULT_KID_AVATAR, onNewChat
   }
 
   const lastMessageId = messages[messages.length - 1]?.id
+  const isStreaming = messages.some((message) => message.streaming)
 
   return (
     <div className="chat-screen">
@@ -208,7 +230,7 @@ const ChatScreen = ({ sessionId, kidName, avatar = DEFAULT_KID_AVATAR, onNewChat
               <MessageText text={message.text} type={message.type} />
               <div className="message-meta">
                 <span className="message-time">{formatTime(message.timestamp)}</span>
-                {message.type === 'ai' && speech.supported && !message.isError && (
+                {message.type === 'ai' && speech.supported && !message.isError && !message.streaming && (
                   <button
                     type="button"
                     className="message-action-btn"
@@ -242,7 +264,7 @@ const ChatScreen = ({ sessionId, kidName, avatar = DEFAULT_KID_AVATAR, onNewChat
           </div>
         ))}
 
-        {isLoading && (
+        {isLoading && !isStreaming && (
           <div className="message ai-message loading-message">
             <div className="message-avatar" aria-hidden="true">{BOT_AVATAR}</div>
             <div className="message-content" aria-label="AI Buddy is typing">

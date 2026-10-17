@@ -10,6 +10,7 @@ You can try the live demo at [Kiddy Chat Demo](https://kiddy-chat-client.sailaop
 ### For kids
 - **Welcome screen**: pick a picture and a nickname (no real name needed)
 - **Chat**: large buttons, typing indicator, and conversation starter ideas
+- **Replies appear as they're written**: streamed sentence by sentence (falls back to a normal request on older backends)
 - **Easy-to-read replies**: simple formatting (headings, lists, bold) rendered safely; links and raw HTML from the AI are never shown as clickable content
 - **🔊 Read to me**: any reply can be read aloud by the browser
 - **🎤 Talk instead of type**: voice input where the browser supports it
@@ -18,9 +19,9 @@ You can try the live demo at [Kiddy Chat Demo](https://kiddy-chat-client.sailaop
 - **Keeps the chat on refresh**: the conversation survives a page reload (cleared when the tab closes)
 
 ### For grown-ups (⚙️ Settings)
-- **Grown-up check**: a two-digit multiplication question; 3 wrong answers locks Settings for 5 minutes, and Settings locks again every time it closes
+- **Grown-up check**: if the backend has a `PARENT_PIN`, Settings asks for that PIN and the server checks it. Otherwise it asks a two-digit multiplication question; 3 wrong answers locks Settings for 5 minutes. Settings locks again every time it closes
 - **AI configuration**: see the server's system prompt and blocked words
-- **Extra instructions**: add your own rules for the AI; they're saved in this browser and applied to every new chat
+- **Extra instructions**: add your own rules for the AI; they're saved in this browser and applied to every new chat. With a backend PIN, the server only accepts instructions a grown-up approved
 - **Daily chat time limit**: 15 minutes to 2 hours a day, with a button to give 15 more minutes
 - **Chat history**: download the current chat, and review or download the last 15 chats saved in this browser
 
@@ -28,7 +29,7 @@ You can try the live demo at [Kiddy Chat Demo](https://kiddy-chat-client.sailaop
 - Responsive design for desktop, tablet and phone
 - Keyboard and screen reader support (labelled controls, announced replies, accessible Settings dialog)
 
-> **Note on safety:** the grown-up check and time limit run in the browser, so they slow kids down but can't stop a determined, tech-savvy one. Anything that must be enforced (content filtering, who may change a session's instructions, rate limits) belongs in the [backend](https://github.com/sailaopoeng/kiddy-chat-api).
+> **Note on safety:** content filtering, the per-session message limit and (with `PARENT_PIN` set) who may change instructions are enforced by the [backend](https://github.com/sailaopoeng/kiddy-chat-api). The math question and the daily time limit run only in the browser, so they slow kids down but can't stop a determined, tech-savvy one.
 
 ## 🚀 Getting Started
 
@@ -99,7 +100,10 @@ Response:
 ```json
 { "response": "string", "session_id": "string", "username": "string" }
 ```
-The `response` may use simple Markdown. A `401` or `403` tells the app the session has expired.
+The `response` may use simple Markdown. A `401` tells the app the session has expired; `429` means too many messages.
+
+### POST `/query/stream` 🔑
+Same request as `/query`. Returns Server-Sent Events: `delta` events (`{"text": "..."}`, complete sentences only) and one final `done` event (`{"response", "session_id", "username"}`). The app shows `done.response` as the final reply, because the server may replace an unsafe reply. If this endpoint returns 404 or 405, the app uses `/query`.
 
 ### GET `/conversation-starters`
 Response:
@@ -118,21 +122,38 @@ Response:
 }
 ```
 
-### POST `/session/add-prompt` 🔑
-Request:
-```json
-{ "additional_prompt": "string" }
-```
+### GET `/parent/status`
 Response:
 ```json
-{ "message": "string" }
+{ "pin_required": true }
+```
+If this fails (for example, an older backend), the app uses the math question.
+
+### POST `/parent/verify`
+Request:
+```json
+{ "pin": "string" }
+```
+Response (`401` wrong PIN, `429` too many tries):
+```json
+{ "parent_token": "string", "expires_in": 900 }
+```
+
+### POST `/session/add-prompt` 🔑
+Request (send header `X-Parent-Token` after a PIN check, or the `signature` from an earlier save of the same text):
+```json
+{ "additional_prompt": "string", "signature": "string (optional)" }
+```
+Response (`signature` is `null` when no PIN is set; `403` means not approved):
+```json
+{ "message": "string", "signature": "string" }
 ```
 
 ## 📱 User Flow
 
 1. **Welcome screen**: the child picks a picture and a nickname
-2. **Session creation**: the app calls `/initiate-session`, then re-applies any saved grown-up instructions with `/session/add-prompt`
-3. **Chat**: each message calls `/query`
+2. **Session creation**: the app calls `/initiate-session`, then re-applies any saved grown-up instructions (with their signature) using `/session/add-prompt`
+3. **Chat**: each message calls `/query/stream`
 4. **New chat**: returns to the welcome screen with the nickname and picture filled in
 
 ## 🗂️ Project Structure

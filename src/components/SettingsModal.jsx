@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getFilterInfo, addPrompt } from '../services/api'
+import { getFilterInfo, addPrompt, getParentStatus, verifyParentPin } from '../services/api'
 import {
   BONUS_MINUTES,
   DAILY_LIMIT_OPTIONS,
@@ -100,10 +100,62 @@ const GrownUpCheck = ({ onPassed, onLocked }) => {
         className="answer-input"
         autoComplete="off"
         data-autofocus
+        autoFocus
       />
       {error && <p className="error-message" role="alert">{error}</p>}
       <div className="verification-buttons">
         <button type="submit" className="verify-btn">Verify</button>
+      </div>
+    </form>
+  )
+}
+
+// ---- Step 1 (when the server has a grown-up PIN): the PIN check ----
+
+const PinCheck = ({ onPassed }) => {
+  const [pin, setPin] = useState('')
+  const [error, setError] = useState('')
+  const [checking, setChecking] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const value = pin.trim()
+    if (!value || checking) return
+    setChecking(true)
+    setError('')
+    try {
+      onPassed(await verifyParentPin(value))
+    } catch (err) {
+      if (err.status === 401) setError("That PIN isn't right.")
+      else if (err.status === 429) setError('Too many wrong PINs. Please try again later.')
+      else setError(err.message)
+      setPin('')
+      setChecking(false)
+    }
+  }
+
+  return (
+    <form className="verification-content" onSubmit={handleSubmit}>
+      <p>Settings are for grown-ups. Please enter the grown-up PIN:</p>
+      <label htmlFor="parent-pin" className="visually-hidden">Grown-up PIN</label>
+      <input
+        id="parent-pin"
+        type="password"
+        inputMode="numeric"
+        value={pin}
+        onChange={(e) => setPin(e.target.value)}
+        placeholder="Enter PIN"
+        className="answer-input"
+        autoComplete="off"
+        maxLength={64}
+        data-autofocus
+        autoFocus
+      />
+      {error && <p className="error-message" role="alert">{error}</p>}
+      <div className="verification-buttons">
+        <button type="submit" className="verify-btn" disabled={checking || !pin.trim()}>
+          {checking ? 'Checking...' : 'Unlock'}
+        </button>
       </div>
     </form>
   )
@@ -175,7 +227,7 @@ const AiConfiguration = () => {
   )
 }
 
-const ParentSettings = ({ sessionId, username, messages, onClose, onSettingsChanged, showToast }) => {
+const ParentSettings = ({ sessionId, username, messages, pinRequired, parentToken, onClose, onSettingsChanged, showToast }) => {
   const [instructions, setInstructions] = useState(getParentInstructions)
   const [hasSavedInstructions, setHasSavedInstructions] = useState(() => Boolean(getParentInstructions()))
   const [isSaving, setIsSaving] = useState(false)
@@ -187,13 +239,25 @@ const ParentSettings = ({ sessionId, username, messages, onClose, onSettingsChan
     const text = instructions.trim()
     if (!text) return
     setIsSaving(true)
-    saveParentInstructions(text)
-    setHasSavedInstructions(true)
     try {
-      await addPrompt(sessionId, text)
+      const { signature } = await addPrompt(sessionId, text, { parentToken })
+      saveParentInstructions(text, signature)
+      setHasSavedInstructions(true)
       showToast('Saved! These instructions apply now and to every new chat. 🎉', 'success')
     } catch (error) {
-      showToast(`Saved for new chats, but this chat couldn't be updated. ${error.message}`, 'error')
+      if (pinRequired) {
+        // Without the server's approval the text can't be used in new chats either.
+        showToast(
+          error.status === 403
+            ? 'Your grown-up check has expired. Please close Settings and enter the PIN again.'
+            : `Couldn't save right now. ${error.message}`,
+          'error'
+        )
+      } else {
+        saveParentInstructions(text)
+        setHasSavedInstructions(true)
+        showToast(`Saved for new chats, but this chat couldn't be updated. ${error.message}`, 'error')
+      }
     } finally {
       setIsSaving(false)
     }
@@ -256,9 +320,11 @@ const ParentSettings = ({ sessionId, username, messages, onClose, onSettingsChan
           placeholder="For example: Keep answers short. Don't help with homework answers, give hints instead."
           className="editable-textarea"
           rows={4}
+          maxLength={2000}
         />
         <p className="section-description">
           Added on top of the default behavior. Saved in this browser and applied to every new chat.
+          {pinRequired && ' The server only accepts changes made with the grown-up PIN.'}
         </p>
         <div className="section-buttons">
           <button
@@ -348,11 +414,27 @@ const ParentSettings = ({ sessionId, username, messages, onClose, onSettingsChan
 // ---- The modal ----
 
 const SettingsModal = ({ onClose, sessionId, username, messages, onSettingsChanged }) => {
-  const [step, setStep] = useState(() => (isSettingsLocked() ? 'locked' : 'verification'))
+  // checking -> pin (server PIN) or verification (math question) -> settings
+  const [step, setStep] = useState('checking')
+  const [pinRequired, setPinRequired] = useState(false)
+  const [parentToken, setParentToken] = useState(null)
   const [toast, setToast] = useState(null)
   const dialogRef = useRef(null)
 
   useDialog(dialogRef, onClose)
+
+  useEffect(() => {
+    let cancelled = false
+    getParentStatus().then((status) => {
+      if (cancelled) return
+      setPinRequired(status.pinRequired)
+      if (status.pinRequired) setStep('pin')
+      else setStep(isSettingsLocked() ? 'locked' : 'verification')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const showToast = useCallback((message, type = 'info') => setToast({ message, type }), [])
   const hideToast = useCallback(() => setToast(null), [])
@@ -372,6 +454,22 @@ const SettingsModal = ({ onClose, sessionId, username, messages, onSettingsChang
       >
         <ModalHeader title={title} onClose={onClose} />
 
+        {step === 'checking' && (
+          <div className="loading-container">
+            <div className="loading-spinner" aria-hidden="true">🔄</div>
+            <p>Checking...</p>
+          </div>
+        )}
+
+        {step === 'pin' && (
+          <PinCheck
+            onPassed={(token) => {
+              setParentToken(token)
+              setStep('settings')
+            }}
+          />
+        )}
+
         {step === 'verification' && (
           <GrownUpCheck onPassed={() => setStep('settings')} onLocked={() => setStep('locked')} />
         )}
@@ -390,6 +488,8 @@ const SettingsModal = ({ onClose, sessionId, username, messages, onSettingsChang
             sessionId={sessionId}
             username={username}
             messages={messages}
+            pinRequired={pinRequired}
+            parentToken={parentToken}
             onClose={onClose}
             onSettingsChanged={onSettingsChanged}
             showToast={showToast}
