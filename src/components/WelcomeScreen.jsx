@@ -1,80 +1,112 @@
 import { useState } from 'react'
 import { initiateSession } from '../services/api'
+import { applyParentInstructions } from '../services/parentSettings'
+import { DEFAULT_KID_AVATAR, KID_AVATARS } from '../constants'
 import './WelcomeScreen.css'
 
-const WelcomeScreen = ({ onSessionStart }) => {
-    const [name, setName] = useState('')
-    const [isLoading, setIsLoading] = useState(false)
-    const [error, setError] = useState('')
+const WelcomeScreen = ({ onSessionStart, initialName = '', initialAvatar = DEFAULT_KID_AVATAR }) => {
+  const [name, setName] = useState(initialName)
+  const [avatar, setAvatar] = useState(initialAvatar)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
 
-    // console.log('WelcomeScreen is rendering!')
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const nickname = name.trim()
 
-    const handleSubmit = async (e) => {
-        e.preventDefault()
-        // console.log('Form submitted with name:', name)
-
-        if (!name.trim()) {
-            setError('Please tell me your name! 😊')
-            return
-        }
-
-        setIsLoading(true)
-        setError('')
-
-        try {
-            // console.log('Calling initiateSession with:', name.trim())
-            const { sessionId } = await initiateSession(name.trim())
-            console.log('Got sessionId:', sessionId)
-            onSessionStart(name.trim(), sessionId)
-        } catch (err) {
-            console.error('Error in handleSubmit:', err)
-            setError(err.message)
-        } finally {
-            setIsLoading(false)
-        }
+    if (!nickname) {
+      setError('Please tell me what to call you! 😊')
+      return
     }
 
-    return (
-        <div className="welcome-screen" style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div className="welcome-container" style={{ background: 'white', padding: '40px', borderRadius: '20px', textAlign: 'center', maxWidth: '500px' }}>
-                <div className="robot-emoji" style={{ fontSize: '4rem', marginBottom: '20px' }}>🤖</div>
-                <h1 className="welcome-title" style={{ color: '#4a5568', fontSize: '2.5rem', marginBottom: '15px' }}>Hi there, little friend!</h1>
-                <p className="welcome-subtitle" style={{ color: '#718096', fontSize: '1.2rem', marginBottom: '30px' }}>
-                    I'm your friendly AI buddy! I love to chat and answer questions.
-                    What's your name?
-                </p>
+    setIsLoading(true)
+    setError('')
 
-                <form onSubmit={handleSubmit} className="name-form">
-                    <div className="input-group">
-                        <input
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="Type your name here..."
-                            className="name-input"
-                            maxLength={50}
-                            disabled={isLoading}
-                        />
-                        <button
-                            type="submit"
-                            className="submit-button"
-                            disabled={isLoading || !name.trim()}
-                        >
-                            {isLoading ? '🔄' : '🚀'} Let's Chat!
-                        </button>
-                    </div>
+    try {
+      const { sessionId } = await initiateSession(nickname)
 
-                    {error && <div className="error-message">{error}</div>}
-                </form>
+      // Re-apply a grown-up's saved instructions to this new chat.
+      try {
+        await applyParentInstructions(sessionId)
+      } catch (instructionsError) {
+        console.warn('Could not apply saved grown-up instructions:', instructionsError)
+      }
 
-                <div className="fun-facts">
-                    <div className="fun-fact">🎨 I love to be creative!</div>
-                    <div className="fun-fact">📚 I know lots of fun facts!</div>
-                    <div className="fun-fact">🎮 I can help with homework too!</div>
-                </div>
+      onSessionStart({ sessionId, kidName: nickname, avatar })
+    } catch (err) {
+      setError(err.message)
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="welcome-screen">
+      <div className="welcome-container">
+        <div className="robot-emoji" aria-hidden="true">🤖</div>
+        <h1 className="welcome-title">Hi there, little friend!</h1>
+        <p className="welcome-subtitle">
+          I'm your friendly AI buddy! I love to chat and answer questions.
+          What should I call you?
+        </p>
+
+        <form onSubmit={handleSubmit} className="name-form">
+          <fieldset className="avatar-picker">
+            <legend>Pick your picture:</legend>
+            <div className="avatar-options">
+              {KID_AVATARS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={`avatar-option ${option === avatar ? 'selected' : ''}`}
+                  onClick={() => setAvatar(option)}
+                  aria-pressed={option === avatar}
+                  aria-label={`Use ${option} as my picture`}
+                  disabled={isLoading}
+                >
+                  {option}
+                </button>
+              ))}
             </div>
+          </fieldset>
+
+          <div className="input-group">
+            <label htmlFor="nickname" className="visually-hidden">Your nickname</label>
+            <input
+              id="nickname"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Type a nickname here..."
+              className="name-input"
+              maxLength={50}
+              autoComplete="off"
+              disabled={isLoading}
+            />
+            <button
+              type="submit"
+              className="submit-button"
+              disabled={isLoading || !name.trim()}
+            >
+              {isLoading ? '🔄' : '🚀'} Let's Chat!
+            </button>
+          </div>
+
+          {error && <div className="error-message" role="alert">{error}</div>}
+        </form>
+
+        <div className="fun-facts">
+          <div className="fun-fact">🎨 I love to be creative!</div>
+          <div className="fun-fact">📚 I know lots of fun facts!</div>
+          <div className="fun-fact">🎮 I can help with homework too!</div>
         </div>
-    )
+
+        <p className="parent-note">
+          👋 Grown-ups: a nickname is all this app needs. Please remind your child not to
+          share their full name, address, school or phone number in the chat.
+        </p>
+      </div>
+    </div>
+  )
 }
 
 export default WelcomeScreen

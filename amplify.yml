@@ -6,9 +6,9 @@ frontend:
         - npm ci
     build:
       commands:
-        - echo "Building with environment variables:"
-        - echo "VITE_API_URL=$VITE_API_URL"
-        - echo "VITE_API_TIMEOUT=$VITE_API_TIMEOUT"
+        # VITE_API_URL must be set under Hosting > Environment variables.
+        # The build fails with a clear message if it is missing.
+        - echo "Building against API at $VITE_API_URL"
         - npm run build
   artifacts:
     baseDirectory: dist
@@ -17,7 +17,3 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
-  environment:
-    variables:
-      VITE_API_URL: http://localhost:3001
-      VITE_API_TIMEOUT: 30000

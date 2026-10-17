@@ -1,88 +1,57 @@
 # AWS Amplify Environment Variables Setup
 
-## How to Configure Environment Variables in AWS Amplify
+The app needs `VITE_API_URL` at **build time**. If it is missing, `npm run build` stops with an error, so a deploy can never quietly point at `localhost`.
 
-### 1. Via AWS Amplify Console (Web Interface)
+| Variable | Required | Example |
+| --- | --- | --- |
+| `VITE_API_URL` | Yes | `https://api.your-domain.com` |
+| `VITE_API_TIMEOUT` | No (default `30000`) | `30000` |
+
+## 1. Via AWS Amplify Console (recommended)
 
 1. Go to your AWS Amplify Console
 2. Select your app
 3. Go to **Hosting** → **Environment variables**
-4. Add the following environment variables:
+4. Add:
 
 ```
 Key: VITE_API_URL
-Value: http://localhost:3001
+Value: https://api.your-domain.com
 
-Key: VITE_API_TIMEOUT  
+Key: VITE_API_TIMEOUT        (optional)
 Value: 30000
 ```
 
 5. Save and redeploy your application
 
-### 2. Via AWS CLI
+## 2. Via AWS CLI
 
 ```bash
-# Set environment variables for your Amplify app
-aws amplify put-app \
+# For the whole app
+aws amplify update-app \
   --app-id YOUR_APP_ID \
-  --environment-variables VITE_API_URL=http://localhost:3001,VITE_API_TIMEOUT=30000
+  --environment-variables VITE_API_URL=https://api.your-domain.com,VITE_API_TIMEOUT=30000
 
-# Or update specific branch environment variables
+# Or for one branch
 aws amplify update-branch \
   --app-id YOUR_APP_ID \
   --branch-name main \
-  --environment-variables VITE_API_URL=http://localhost:3001,VITE_API_TIMEOUT=30000
+  --environment-variables VITE_API_URL=https://api.your-domain.com,VITE_API_TIMEOUT=30000
 ```
 
-### 3. Via amplify.yml Build Settings
+## Build settings
 
-Add environment variables to your `amplify.yml`:
-
-```yaml
-version: 1
-frontend:
-  phases:
-    preBuild:
-      commands:
-        - npm ci
-    build:
-      commands:
-        - npm run build
-  artifacts:
-    baseDirectory: dist
-    files:
-      - '**/*'
-  cache:
-    paths:
-      - node_modules/**/*
-  environment:
-    variables:
-      VITE_API_URL: http://localhost:3001
-      VITE_API_TIMEOUT: 30000
-```
+`amplify.yml` in the repository root installs dependencies, prints the API URL being used, and builds into `dist/`. It deliberately does **not** set a default `VITE_API_URL`; set it in the console as above.
 
 ## Important Notes
 
-1. **VITE_ Prefix**: All environment variables that need to be accessible in the browser must be prefixed with `VITE_`
-
-2. **Build Time Variables**: Vite environment variables are embedded at build time, not runtime
-
-3. **Security**: Only use `VITE_` prefixed variables for non-sensitive data since they're exposed to the browser
-
-4. **Fallback**: The app has fallback values in case environment variables are not set
-
-## Verification
-
-After deployment, check the browser console for environment variable debug logs:
-- Environment check logs will show current MODE, PROD status, and VITE_API_URL value
-- API requests will show the full URL being used
+1. **`VITE_` prefix**: only variables starting with `VITE_` reach the browser code.
+2. **Build time, not runtime**: values are baked into the bundle when it is built. After changing a variable, redeploy.
+3. **Not secret**: anyone can read these values in the browser, so never put API keys or passwords in them.
+4. **CORS**: in production the browser calls `VITE_API_URL` directly, so the backend must allow your Amplify domain.
 
 ## Troubleshooting
 
-If environment variables are not working:
-
-1. Verify the variable names have `VITE_` prefix
-2. Check AWS Amplify console for correct variable values
-3. Redeploy the application after adding variables
-4. Check browser console for debug logs
-5. Ensure no typos in variable names
+- **Build fails with "VITE_API_URL is not set"**: add the variable in the Amplify console and redeploy.
+- **App shows "I can't connect to my brain right now!"**: check that the URL in the build log ("Building against API at ...") is correct and reachable, uses `https`, and that the backend allows your domain (CORS).
+- **Changes don't show up**: redeploy after changing variables.
