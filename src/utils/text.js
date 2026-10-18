@@ -26,3 +26,14 @@ export function toSpeechText(markdown) {
     .replace(/(\*\*|__|~~|\*|_)/g, '')
   return stripEmoji(plain).replace(/\s+/g, ' ')
 }
+
+/** Shortens text to at most max characters (as the input's maxLength counts them) without cutting an emoji in half. */
+export function truncate(text, max) {
+  if (text.length <= max) return text
+  let result = ''
+  for (const char of text) {
+    if (result.length + char.length > max) break
+    result += char
+  }
+  return result
+}

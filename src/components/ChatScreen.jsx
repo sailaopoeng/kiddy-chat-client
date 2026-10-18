@@ -6,7 +6,7 @@ import { saveConversation } from '../services/chatHistory'
 import { useSpeech } from '../hooks/useSpeech'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import { useDailyTimeLimit } from '../hooks/useDailyTimeLimit'
-import { stripEmoji } from '../utils/text'
+import { stripEmoji, truncate } from '../utils/text'
 import { BOT_AVATAR, DEFAULT_KID_AVATAR, MAX_MESSAGE_LENGTH } from '../constants'
 import SettingsModal from './SettingsModal'
 import './ChatScreen.css'
@@ -72,7 +72,7 @@ const ChatScreen = ({ sessionId, kidName, avatar = DEFAULT_KID_AVATAR, onNewChat
   const speech = useSpeech()
   const { timeUp, refresh: refreshTimeLimit } = useDailyTimeLimit()
   const voice = useVoiceInput((heard) =>
-    setInputText((prev) => (prev ? `${prev} ${heard}` : heard).slice(0, MAX_MESSAGE_LENGTH))
+    setInputText((prev) => truncate(prev ? `${prev} ${heard}` : heard, MAX_MESSAGE_LENGTH))
   )
 
   useEffect(() => {
