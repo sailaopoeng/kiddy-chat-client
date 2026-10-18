@@ -1,26 +1,49 @@
 import { useState } from 'react'
 import WelcomeScreen from './components/WelcomeScreen'
 import ChatScreen from './components/ChatScreen'
+import { session as sessionStore } from './services/storage'
 import './App.css'
 
+// Kept in sessionStorage so a page refresh doesn't lose the chat,
+// but closing the tab starts fresh.
+const SESSION_KEY = 'kiddy-session'
+
+const loadSession = () => {
+  const saved = sessionStore.getJSON(SESSION_KEY, null)
+  return saved?.sessionId ? saved : null
+}
+
 function App() {
-  const [sessionId, setSessionId] = useState(null)
-  const [kidName, setKidName] = useState('')
+  const [session, setSession] = useState(loadSession)
+  const [lastProfile, setLastProfile] = useState(null)
 
-  // console.log('App rendering - sessionId:', sessionId, 'kidName:', kidName)
+  const handleSessionStart = (newSession) => {
+    sessionStore.setJSON(SESSION_KEY, newSession)
+    setSession(newSession)
+  }
 
-  const handleSessionStart = (name, id) => {
-    // console.log('handleSessionStart called with name:', name, 'id:', id)
-    setKidName(name)
-    setSessionId(id)
+  const handleNewChat = () => {
+    sessionStore.remove(SESSION_KEY)
+    setLastProfile({ kidName: session.kidName, avatar: session.avatar })
+    setSession(null)
   }
 
   return (
     <div className="app">
-      {!sessionId ? (
-        <WelcomeScreen onSessionStart={handleSessionStart} />
+      {session ? (
+        <ChatScreen
+          key={session.sessionId}
+          sessionId={session.sessionId}
+          kidName={session.kidName}
+          avatar={session.avatar}
+          onNewChat={handleNewChat}
+        />
       ) : (
-        <ChatScreen sessionId={sessionId} kidName={kidName} />
+        <WelcomeScreen
+          onSessionStart={handleSessionStart}
+          initialName={lastProfile?.kidName}
+          initialAvatar={lastProfile?.avatar}
+        />
       )}
     </div>
   )

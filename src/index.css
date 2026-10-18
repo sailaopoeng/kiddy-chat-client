@@ -1,5 +1,5 @@
 :root {
-  font-family: 'Comic Sans MS', cursive, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -17,7 +17,6 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  font-family: 'Comic Sans MS', cursive, sans-serif;
 }
 
 #root {
@@ -64,4 +63,17 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+
+/* Hidden on screen but still read by screen readers */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
